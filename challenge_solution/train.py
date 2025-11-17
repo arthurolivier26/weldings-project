@@ -1,8 +1,9 @@
-import numpy as np
-import torch
 from pathlib import Path
 
-import torch, torchvision
+import numpy as np
+import torch
+import torchvision
+
 print("torch:", torch.__version__)
 print("torchvision:", torchvision.__version__)
 print("torch.cuda.is_available():", torch.cuda.is_available())
@@ -11,11 +12,11 @@ print("cuDNN version:", torch.backends.cudnn.version())
 if torch.cuda.is_available():
     print("GPU:", torch.cuda.get_device_name(0))
 
-from AIComponent import MyAIComponent
 import df_utils as dm
+from AIComponent import MyAIComponent
+from torch_dataloader import ImageDataFrameDataset
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
-from torch_dataloader import ImageDataFrameDataset
 
 # Exemple de transform basique
 transform = transforms.Compose([transforms.Resize(size=(224, 224), interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True),
@@ -47,6 +48,6 @@ ai_component.train_model(Train_Dataset,
                          save_path="best_model.pth",
                          augmentation_fn=None,
                          preprocess_fn=None,
-                         epochs=50,
+                         epochs=10,
                          batch_size=128,
                          lr=3e-4)

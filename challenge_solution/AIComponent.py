@@ -1,23 +1,30 @@
+import os
+import time
+import warnings
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import cv2
+import numpy as np
+import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-import timm
-import cv2
-import numpy as np
-import os
-import time
-from pathlib import Path
-from abc import ABC, abstractmethod
-from typing import List, Dict, Tuple, Optional
+from scipy.optimize import minimize
+from sklearn.covariance import EmpiricalCovariance
+from sklearn.decomposition import PCA
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import warnings
-from sklearn.decomposition import PCA
-from sklearn.covariance import EmpiricalCovariance
 
-from scipy.optimize import minimize
 warnings.filterwarnings('ignore')
+
+import torch
+import torch.nn as nn
+import torchvision.transforms as T
+from torch.utils.data import DataLoader, Dataset
+from torchvision.models import mobilenet_v2
 
 # =============================================================================
 # ABSTRACT INTERFACE (Challenge Requirement)
@@ -95,6 +102,22 @@ class WeldingQualityModel(nn.Module):
             'probabilities': probabilities,
             'embedding': backbone_features}
 
+
+class MobileNetV2Backbone(nn.Module):
+    """MobileNetV2 backbone for lightweight applications."""
+
+    def __init__(self, pretrained=True):
+        super().__init__()
+        mobilenet = mobilenet_v2(pretrained=pretrained)
+        mobilenet.classifier[1] = nn.Linear(mobilenet.classifier[1].in_features, 3)
+        self.features = mobilenet.features
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        return x
 
 # =============================================================================
 # DATA AUGMENTATION
@@ -174,7 +197,7 @@ class MyAIComponent(AbstractAIComponent):
             'ood_threshold': 1} # <- Tune values
 
     def init_model(self):
-        self.model = WeldingQualityModel(num_classes=3, dropout_rate=0.2)
+        self.model = MobileNetV2Backbone(pretrained=True)
 
     def load_model(self, config_file=None):
         """Load the trained model."""
@@ -354,7 +377,7 @@ class MyAIComponent(AbstractAIComponent):
         save_path="best_model.pth",
         augmentation_fn=None,
         preprocess_fn=None,
-        epochs=100,
+        epochs=10,
         batch_size=64,
         lr=3e-4,
     ):
