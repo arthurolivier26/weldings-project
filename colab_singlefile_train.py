@@ -1,22 +1,5 @@
 """
-Colab Single-File Training Script for Welding Quality Classification
--------------------------------------------------------------------
 
-Usage (in Google Colab):
-
-1) Upload this file to your Colab working directory (e.g., /content)
-2) Run:
-
-   from google.colab import drive
-   drive.mount('/content/drive')  # optional if you want to save outputs to Drive
-
-    !python colab_singlefile_train.py
-
-The script uses built-in defaults (dataset URL, epochs, batch size, etc.).
-You can change them by editing the constants near the bottom of this file.
-
-Notes:
-- If the dataset archive is large, first run-time may take time to download.
 - The script attempts to install missing Python dependencies automatically when running in Colab.
 - Saved weights: best_model.pth in the specified --out-dir.
 """
@@ -34,18 +17,18 @@ from typing import Optional, Tuple
 
 def _in_colab() -> bool:
     try:
-        import google.colab  # type: ignore
+        import google.colab  
         return True
     except Exception:
         return False
 
 
 def ensure_deps():
-    """Install missing dependencies when running in Colab or constrained envs."""
+    
     need = []
     try:
-        import torch  # noqa: F401
-        import torchvision  # noqa: F401
+        import torch
+        import torchvision  
     except Exception:
         need += ["torch", "torchvision"]
 
@@ -80,9 +63,10 @@ from tqdm import tqdm
 
 
 class ImageMetaDataset(Dataset):
+   
     """
     Dataset basé sur une métadescription parquet/CSV.
-    - Attendu: colonnes 'path' (chemin relatif) OU 'external_path' (URL), et 'class' (OK/KO).
+
     - Si le fichier local n'existe pas, essaie de charger via 'external_path' si dispo.
     """
 
@@ -134,7 +118,7 @@ class ImageMetaDataset(Dataset):
 
 
 def stratified_split(df: pd.DataFrame, alpha: float = 0.8, random_state: int = 42) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Split stratifie sur la colonne 'class'."""
+    #Split stratifié
     if "class" not in df.columns:
         raise ValueError("DataFrame must contain a 'class' column for stratification.")
     splitter = StratifiedShuffleSplit(n_splits=1, train_size=alpha, random_state=random_state)
@@ -177,7 +161,7 @@ def train(
     best_val = float("inf")
     history = {"train_losses": [], "val_losses": [], "best_val_loss": None}
 
-    print("🟦 Training started...")
+    print(" Training started...")
     t0 = time.time()
     for epoch in range(1, epochs + 1):
         model.train()
@@ -200,7 +184,7 @@ def train(
         avg_train = float(np.mean(train_losses)) if train_losses else 0.0
         history["train_losses"].append(avg_train)
         history["val_losses"].append(val_loss)
-        print(f"📘 Train {avg_train:.4f} | Val {val_loss:.4f}")
+        print(f" Train {avg_train:.4f} | Val {val_loss:.4f}")
 
         if val_loss < best_val:
             best_val = val_loss
@@ -230,25 +214,25 @@ def download_and_extract_zip(url: str, dest_dir: Path) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     zip_path = dest_dir / "dataset.zip"
     if not zip_path.exists():
-        print(f"⬇️ Downloading dataset from {url}")
+        print(f" Downloading dataset from {url}")
         with requests.get(url, stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(zip_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=1 << 20):
                     if chunk:
                         f.write(chunk)
-        print(f"✅ Downloaded to {zip_path}")
+        print(f" Downloaded to {zip_path}")
     else:
-        print(f"ℹ️ Reusing existing archive: {zip_path}")
+        print(f" Reusing existing archive: {zip_path}")
 
     extract_root = dest_dir / "dataset"
     if not extract_root.exists():
-        print("📦 Extracting...")
+        print(" Extracting...")
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(extract_root)
-        print(f"✅ Extracted to {extract_root}")
+        print(f" Extracted to {extract_root}")
     else:
-        print(f"ℹ️ Reusing existing extracted folder: {extract_root}")
+        print(f" Reusing existing extracted folder: {extract_root}")
     return extract_root
 
 
@@ -264,7 +248,7 @@ def find_metadata_path(extract_root: Path) -> Optional[Path]:
 
 
 def build_dataframe(meta_path: Path, dataset_root: Path, limit: Optional[int] = None) -> pd.DataFrame:
-    print(f"📄 Loading metadata: {meta_path}")
+    print(f" Loading metadata: {meta_path}")
     if meta_path.suffix.lower() == ".parquet":
         df = pd.read_parquet(meta_path)
     else:
@@ -273,14 +257,14 @@ def build_dataframe(meta_path: Path, dataset_root: Path, limit: Optional[int] = 
     # Keep only needed columns if present
     keep = [c for c in ["class", "path", "external_path", "welding-seams", "labelling_type"] if c in df.columns]
     df = df[keep].copy()
-    # Normalize classes: accept OK, KO, and optionally UNKNOWN if present
+    
     if "class" in df.columns:
         df = df[df["class"].isin(["OK", "KO", "UNKNOWN"])].copy()
 
-    # Some archives store images under a specific base folder; keep raw 'path' as-is and will be joined at Dataset time
+    # Some archives store images under a specific base folder
     if limit is not None and limit > 0:
         df = df.sample(n=min(limit, len(df)), random_state=42).reset_index(drop=True)
-        print(f"ℹ️ Using a subset of {len(df)} samples for quick start")
+        print(f" Using a subset of {len(df)} samples for quick start")
 
     # Provide a best-effort check for local files
     sample_local = 0
@@ -288,7 +272,7 @@ def build_dataframe(meta_path: Path, dataset_root: Path, limit: Optional[int] = 
         p = df.iloc[i].get("path")
         if isinstance(p, str) and (dataset_root / p).is_file():
             sample_local += 1
-    print(f"🔎 Local path check (first 50): found {sample_local} existing files")
+    print(f" Local path check (first 50): found {sample_local} existing files")
     return df
 
 
@@ -310,14 +294,14 @@ def create_loaders(df_train: pd.DataFrame, df_val: pd.DataFrame, dataset_root: P
     ds_train = ImageMetaDataset(df_train, dataset_root, transform=tf_train)
     ds_val = ImageMetaDataset(df_val, dataset_root, transform=tf_val)
 
-    # On Colab, too many workers can lead to shared memory issues; 2 is safe.
+    
     train_loader = DataLoader(ds_train, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
     val_loader = DataLoader(ds_val, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
     return train_loader, val_loader
 
 
 def main():
-    # ===== Default configuration (edit this block if needed) =====
+    
     dataset_url: str = "https://minio-storage.apps.confianceai-public.irtsysx.fr/challenge-welding/datasets/example_mini_dataset.zip"
     work_dir = Path("/content")
     out_dir = Path("/content/output")
@@ -326,7 +310,7 @@ def main():
     lr: float = 3e-4
     subset: int = 0  # 0 means use full dataset; set to e.g. 2000 for quick debug
     num_classes: int = 3  # choose 2 or 3
-    # =============================================================
+   
 
     work_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -375,7 +359,7 @@ def main():
         out_path=best_path,
     )
 
-    print(f"✅ Training finished. Weights saved to: {best_path}")
+    print(f" Training finished. Weights saved to: {best_path}")
 
 
 if __name__ == "__main__":
