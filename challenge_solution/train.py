@@ -9,7 +9,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-# --- IMPORTS PROJET ---
+# IMPORTS 
 try:
     import df_utils as dm
     from torch_dataloader import ImageDataFrameDataset
@@ -18,21 +18,21 @@ try:
     except ImportError:
         from challenge_solution.AIComponent import MyAIComponent
 except ImportError as e:
-    print(f"❌ Erreur d'import : {e}")
+    print(f" Erreur d'import : {e}")
     sys.exit(1)
 
-# --- CONFIGURATION ---
+# config
 BATCH_SIZE = 32         
 LR = 3e-4               
 EPOCHS = 10             
 
-# 📍 DÉFINITION DES CHEMINS (Adaptée à votre structure)
+# DÉFINITION DES CHEMINS 
 # Le dossier dataset est à la racine de weldings-project, donc ".." depuis challenge_solution
 DATASET_FOLDER_NAME = "example_mini_dataset"
 DATASET_LOCAL_PATH = os.path.join("..", DATASET_FOLDER_NAME)
 PARQUET_PATH = os.path.join(DATASET_LOCAL_PATH, "metadata/ds_meta.parquet")
 
-# --- 1. SETUP ---
+# 1. setup
 if torch.cuda.is_available():
     device = torch.device('cuda')
     print(f"🔧 Using CUDA: {torch.cuda.get_device_name(0)}")
@@ -40,7 +40,7 @@ else:
     device = torch.device('cpu')
     print("🔧 Using CPU")
 
-# --- 2. DATASETS ---
+# 2. datasets
 train_transform = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((224, 224)),
@@ -58,44 +58,41 @@ val_transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-print(f"📂 Loading Metadata from: {PARQUET_PATH}")
+print(f" Loading Metadata from: {PARQUET_PATH}")
 
 if not os.path.exists(PARQUET_PATH):
-    print(f"🚨 ERREUR: Le fichier {PARQUET_PATH} est introuvable.")
+    print(f" ERREUR: Le fichier {PARQUET_PATH} est introuvable.")
     print(f"   Chemin actuel d'exécution: {os.getcwd()}")
     sys.exit(1)
 
-# Chargement Parquet
 try:
     df_data = pd.read_parquet(PARQUET_PATH)
 except Exception as e:
-    print(f"🚨 Impossible de lire le parquet: {e}")
+    print(f" Impossible de lire le parquet: {e}")
     sys.exit(1)
 
-# --- NETTOYAGE DES CHEMINS ---
-# Le parquet contient des chemins serveur longs. On veut les chemins locaux.
-# Ex: .../example_mini_dataset/c33/... -> ../example_mini_dataset/c33/...
+#  NETTOYAGE DES CHEMINS
 
 def fix_path_for_local(p):
     p = str(p)
     # On coupe le chemin au mot clé "example_mini_dataset"
     if DATASET_FOLDER_NAME in p:
-        # split renvoie ['challenge-welding/datasets/', '/c33/operator/...']
+        
         relative_part = p.split(DATASET_FOLDER_NAME)[-1]
         
-        # On enlève les slashs initiaux éventuels (\ ou /)
+        # On enlève les slashs initiaux éventuels
         relative_part = relative_part.lstrip('/\\')
         
-        # On reconstruit : ../example_mini_dataset/c33/operator/...
+        # On reconstruit
         return os.path.join(DATASET_LOCAL_PATH, relative_part)
     return p
 
 # On applique la correction
-path_col = 'path' # Nom standard dans votre parquet
+path_col = 'path' 
 df_data['full_path'] = df_data[path_col].apply(fix_path_for_local)
 
-# --- PREPARATION LABELS ---
-label_col = 'class' # Nom standard dans votre parquet
+#  LABELS -
+label_col = 'class' 
 # On ne garde que les lignes valides (OK ou KO)
 df_data = df_data[df_data[label_col].isin(['OK', 'KO'])].copy()
 
@@ -111,25 +108,25 @@ print(f"   -> Train size: {len(train_df)} | Val size: {len(val_df)}")
 print(f"   -> Exemple de chemin corrigé: {train_df['full_path'].iloc[0]}")
 
 # Création Datasets
-# root_dir est vide car 'full_path' est déjà complet et relatif
+
 train_ds = ImageDataFrameDataset(df=train_df, root_dir="", path_col="full_path", label_col="target", transform=train_transform, channels_first=True)
 val_ds = ImageDataFrameDataset(df=val_df, root_dir="", path_col="full_path", label_col="target", transform=val_transform, channels_first=True)
 
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
 val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
 
-# --- 3. MODELE ---
-print("🤖 Initializing AI Component...")
+# 3. Modele
+print(" Initializing AI Component...")
 ai_component = MyAIComponent(device=device.type)
 ai_component.init_model(use_weights=True)
 
-# --- 4. TRAIN LOOP ---
+#  TRAIN LOOP 
 optimizer = torch.optim.AdamW(ai_component.model.parameters(), lr=LR, weight_decay=1e-4)
 criterion = nn.CrossEntropyLoss()
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
 best_val_acc = 0.0
-print(f"🚀 Starting training for {EPOCHS} epochs...")
+print(f" Starting training for {EPOCHS} epochs...")
 
 for epoch in range(EPOCHS):
     # Train
@@ -168,14 +165,14 @@ for epoch in range(EPOCHS):
         best_val_acc = val_acc
         torch.save(ai_component.model.state_dict(), "temp_backbone.pth")
 
-print(f"✅ Training finished. Best Acc: {best_val_acc:.2f}%")
+print(f" Training finished. Best Acc: {best_val_acc:.2f}%")
 
-# --- 5. FITTING TRUSTWORTHY MODULES ---
-print("\n🔧 Fitting Trustworthy Modules...")
+#  5. FITTING TRUSTWORTHY MODULES
+
 if os.path.exists("temp_backbone.pth"):
     ai_component.model.load_state_dict(torch.load("temp_backbone.pth"))
 else:
-    print("⚠️ Pas de backup trouvé, on continue avec les poids actuels.")
+    print(" Pas de backup trouvé, on continue avec les poids actuels.")
 ai_component.model.eval()
 
 # A. Fit Mahalanobis
@@ -212,9 +209,9 @@ ai_component.threshold_estimator.fit_from_validation(
     labels=np.array(val_labels_list)
 )
 
-print(f"   📊 Final Thresholds: {ai_component.threshold_estimator.thresholds}")
+print(f"    Final Thresholds: {ai_component.threshold_estimator.thresholds}")
 
-# --- 6. SAUVEGARDE FINALE ---
+# SAUVEGARDE FINALE 
 final_path = "best_model.pth"
 ai_component.save_model(final_path, extras={
     "ood_detector": ai_component.ood_detector.state_dict(),
@@ -224,4 +221,4 @@ ai_component.save_model(final_path, extras={
 if os.path.exists("temp_backbone.pth"):
     os.remove("temp_backbone.pth")
 
-print(f"\n🎉 SUCCESS! Model saved to {final_path}")
+print(f"\n SUCCESS! Model saved to {final_path}")
